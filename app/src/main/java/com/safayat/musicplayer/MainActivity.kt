@@ -16,9 +16,13 @@ import android.widget.*
 import android.text.Editable
 import android.text.TextWatcher
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-
+import android.content.ComponentName
+import androidx.core.content.ContextCompat
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
 data class Song(
     val id: Long,
     val title: String,
@@ -30,7 +34,8 @@ data class Song(
 
 class MainActivity : Activity() {
 
-    private lateinit var player: ExoPlayer
+private lateinit var player: MediaController
+private var controllerFuture: ListenableFuture<MediaController>? = null
     private lateinit var root: LinearLayout
     private lateinit var screen: LinearLayout
     private lateinit var mini: LinearLayout
@@ -61,10 +66,29 @@ class MainActivity : Activity() {
         window.navigationBarColor = bg
         window.decorView.systemUiVisibility = 0
 
-        player = ExoPlayer.Builder(this).build()
+val token = SessionToken(
+    this,
+    ComponentName(this, MusicService::class.java)
+)
+
+val future = MediaController.Builder(this, token).buildAsync()
+controllerFuture = future
+
+future.addListener({
+    try {
+        player = future.get()
 
         createLayout()
         checkPermission()
+
+    } catch (e: Exception) {
+        Toast.makeText(
+            this,
+            "Player connection failed: ${e.message}",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+}, ContextCompat.getMainExecutor(this))
     }
 
     private fun createLayout() {
@@ -155,10 +179,31 @@ root.addView(
     }
 
     private fun checkPermission() {
-        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
-            loadSongs()
+        val audioGranted =
+            checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+
+        val notificationNeeded =
+            Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+
+        if (!audioGranted) {
+            val requested = mutableListOf(permission)
+
+            if (notificationNeeded) {
+                requested.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+
+            requestPermissions(requested.toTypedArray(), 100)
         } else {
-            requestPermissions(arrayOf(permission), 100)
+            loadSongs()
+
+            if (notificationNeeded) {
+                requestPermissions(
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    101
+                )
+            }
         }
     }
 
@@ -169,13 +214,14 @@ root.addView(
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode == 100 &&
-            grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        ) {
-            loadSongs()
-        } else {
-            render()
+        if (requestCode == 100) {
+            if (grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            ) {
+                loadSongs()
+            } else {
+                render()
+            }
         }
     }
 
@@ -600,12 +646,34 @@ root.addView(
 
         if (index >= 0) {
             player.setMediaItems(
-                songs.map { MediaItem.fromUri(it.uri) },
+                songs.map {
+                    MediaItem.Builder()
+                        .setUri(it.uri)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(it.title)
+                                .setArtist(it.artist)
+                                .setAlbumTitle(it.album)
+                                .build()
+                        )
+                        .build()
+                },
                 index,
                 0
             )
         } else {
-            player.setMediaItem(MediaItem.fromUri(song.uri))
+            player.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(song.uri)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(song.title)
+                            .setArtist(song.artist)
+                            .setAlbumTitle(song.album)
+                            .build()
+                    )
+                    .build()
+            )
         }
 
         player.prepare()
@@ -1059,6 +1127,6 @@ player.addListener(object : Player.Listener {
 
     override fun onDestroy() {
         super.onDestroy()
-        player.release()
+        controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 }
