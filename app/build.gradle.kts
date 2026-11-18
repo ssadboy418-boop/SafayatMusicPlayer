@@ -26,6 +26,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
 }
