@@ -717,12 +717,42 @@ root.addView(
             }
         )
 
-        player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                playButton.text = if (isPlaying) "Ⅱ" else "▶"
-            }
-        })
+val progressHandler = android.os.Handler(
+    android.os.Looper.getMainLooper()
+)
 
+val progressUpdater = object : Runnable {
+    override fun run() {
+        val duration = player.duration
+        val position = player.currentPosition
+
+        if (duration > 0) {
+            seek.progress =
+                ((position * 1000) / duration).toInt()
+
+            currentTime.text = time(position)
+            totalTime.text = time(duration)
+        }
+
+        if (player.isPlaying) {
+            progressHandler.postDelayed(this, 500)
+        }
+    }
+}
+
+player.addListener(object : Player.Listener {
+    override fun onIsPlayingChanged(isPlaying: Boolean) {
+        playButton.text = if (isPlaying) "Ⅱ" else "▶"
+
+        progressHandler.removeCallbacks(progressUpdater)
+
+        if (isPlaying) {
+            progressHandler.post(progressUpdater)
+        } else {
+            currentTime.text = time(player.currentPosition)
+        }
+    }
+})
         space(20)
 
         val controls = LinearLayout(this).apply {
