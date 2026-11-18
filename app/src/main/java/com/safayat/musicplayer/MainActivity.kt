@@ -84,15 +84,21 @@ class MainActivity : Activity() {
             setBackgroundColor(card)
             visibility = View.GONE
         }
+val scrollView = ScrollView(this).apply {
+    isFillViewport = true
+    isVerticalScrollBarEnabled = false
+}
 
-        root.addView(
-            screen,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        )
+scrollView.addView(screen)
+
+root.addView(
+    scrollView,
+    LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        0,
+        1f
+    )
+)
 
         root.addView(
             mini,
