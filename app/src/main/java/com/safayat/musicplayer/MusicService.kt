@@ -1,6 +1,7 @@
-
 package com.safayat.musicplayer
 
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -15,10 +16,21 @@ class MusicService : MediaSessionService() {
 
         player = ExoPlayer.Builder(this).build()
 
-        mediaSession = MediaSession.Builder(
+        val launchIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+
+        val sessionIntent = PendingIntent.getActivity(
             this,
-            player
-        ).build()
+            100,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
+        )
+
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(sessionIntent)
+            .build()
     }
 
     override fun onGetSession(
@@ -33,4 +45,3 @@ class MusicService : MediaSessionService() {
         super.onDestroy()
     }
 }
-
