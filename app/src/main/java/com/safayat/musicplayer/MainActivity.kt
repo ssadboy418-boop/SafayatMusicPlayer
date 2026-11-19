@@ -301,91 +301,82 @@ root.addView(
     }
 
     private fun homeScreen() {
-        heading("SAFAYAT", "MUSIC PLAYER")
-
-        txt(
-            "Your music. Your vibe.",
-            22f,
-            white,
-            true
-        )
-
-        txt(
-            "Listen to your favorite songs",
-            13f,
-            muted
-        )
-
+        heading("SAFAYAT MUSIC", "Welcome back")
+        txt("Your music, your world.", 14f, muted)
         space(18)
 
         val stats = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = rounded(card, 18)
-            setPadding(dp(15), dp(18), dp(15), dp(18))
+            background = rounded(Color.rgb(39, 27, 58), 18)
+            setPadding(dp(12), dp(15), dp(12), dp(15))
         }
 
-        val songCount = songs.size.toString()
-        val albumCount = songs.map { it.album }.distinct().size.toString()
-        val artistCount = songs.map { it.artist }.distinct().size.toString()
-
-        stats.addView(
-            stat("♫", songCount, "Songs"),
-            LinearLayout.LayoutParams(0, dp(70), 1f)
-        )
-
-        stats.addView(
-            stat("▣", albumCount, "Albums"),
-            LinearLayout.LayoutParams(0, dp(70), 1f)
-        )
-
-        stats.addView(
-            stat("♙", artistCount, "Artists"),
-            LinearLayout.LayoutParams(0, dp(70), 1f)
-        )
-
+        stats.addView(stat("♫", songs.size.toString(), "Songs"),
+            LinearLayout.LayoutParams(0, dp(70), 1f))
+        stats.addView(stat("▣", songs.map { it.album }.distinct().size.toString(), "Albums"),
+            LinearLayout.LayoutParams(0, dp(70), 1f))
+        stats.addView(stat("♙", songs.map { it.artist }.distinct().size.toString(), "Artists"),
+            LinearLayout.LayoutParams(0, dp(70), 1f))
         screen.addView(stats)
+
+        space(22)
+        txt("Featured Track", 19f, white, true)
+        space(10)
+
+        val featured = songs.firstOrNull()
+        if (featured != null) {
+            val hero = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(13), dp(13), dp(13), dp(13))
+                background = rounded(Color.rgb(72, 39, 105), 20)
+                setOnClickListener { playSong(featured) }
+            }
+
+            hero.addView(
+                artworkView(featured, 112),
+                LinearLayout.LayoutParams(dp(112), dp(112))
+            )
+
+            val details = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(13), 0, 0, 0)
+            }
+            details.addView(txt("NOW IN YOUR LIBRARY", 10f, Color.LTGRAY, true))
+            details.addView(txt(featured.title, 17f, white, true))
+            details.addView(txt(featured.artist, 12f, Color.LTGRAY))
+            spaceInside(details, 9)
+            details.addView(txt("▶  PLAY NOW", 13f, white, true))
+
+            hero.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            screen.addView(hero)
+        } else {
+            empty("Your library is empty", "Allow audio permission to find your music.")
+        }
 
         space(22)
         txt("Quick Access", 19f, white, true)
         space(10)
 
-        feature(
-            "♫",
-            "All Songs",
-            "Explore your music collection"
-        ) {
+        feature("♫", "All Songs", "Explore your music collection") {
             tab = "Songs"
             render()
         }
-
-        feature(
-            "♥",
-            "Favorite Songs",
-            "Your most loved tracks"
-        ) {
+        feature("♥", "Favorite Songs", "Your favorite tracks") {
             tab = "Library"
             render()
         }
-
-        feature(
-            "▣",
-            "Albums",
-            "Browse music by album"
-        ) {
+        feature("▣", "Albums", "Browse your albums") {
             tab = "Albums"
             render()
         }
 
-        space(20)
+        space(18)
         txt("Recently Added", 19f, white, true)
-        space(8)
+        space(10)
 
-        if (songs.isEmpty()) {
-            empty("No music found", "Allow audio permission to scan your songs.")
-        } else {
-            songs.takeLast(5).reversed().forEach {
-                songRow(it)
-            }
+        if (songs.isNotEmpty()) {
+            songs.takeLast(6).reversed().forEach { songRow(it) }
         }
     }
 
@@ -545,7 +536,32 @@ root.addView(
                 songRow(it)
             }
         }
-    }    private fun songRow(song: Song): LinearLayout {
+    }    private fun artworkView(song: Song, size: Int): ImageView {
+        val bitmap = try {
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(this, song.uri)
+                val bytes = retriever.embeddedPicture
+                if (bytes != null) {
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                } else null
+            } finally {
+                retriever.release()
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+        return ImageView(this).apply {
+            setImageBitmap(bitmap)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = rounded(Color.rgb(75, 43, 105), 12)
+            clipToOutline = true
+            contentDescription = "${song.album} artwork"
+        }
+    }
+
+    private fun songRow(song: Song): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -553,16 +569,7 @@ root.addView(
             background = rounded(card, 14)
         }
 
-        val artwork = TextView(this).apply {
-            text = "♫"
-            textSize = 25f
-            gravity = Gravity.CENTER
-            setTextColor(white)
-            background = rounded(
-                Color.rgb(93, 49, 145),
-                12
-            )
-        }
+        val artwork = artworkView(song, 48)
 
         row.addView(
             artwork,
