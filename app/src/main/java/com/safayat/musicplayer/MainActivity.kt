@@ -41,6 +41,7 @@ private var controllerFuture: ListenableFuture<MediaController>? = null
     private lateinit var mini: LinearLayout
 
     private val songs = mutableListOf<Song>()
+    private val artworkExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
     private val favorites = mutableSetOf<Long>()
 
     private val purple = Color.rgb(168, 85, 247)
@@ -537,28 +538,45 @@ root.addView(
             }
         }
     }    private fun artworkView(song: Song, size: Int): ImageView {
-        val bitmap = try {
-            val retriever = android.media.MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(this, song.uri)
-                val bytes = retriever.embeddedPicture
-                if (bytes != null) {
-                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                } else null
-            } finally {
-                retriever.release()
+        val image = ImageView(this)
+        val key = song.uri.toString()
+
+        image.tag = key
+        image.setImageResource(android.R.drawable.ic_media_play)
+        image.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        image.background = rounded(Color.rgb(75, 43, 105), 12)
+        image.clipToOutline = true
+        image.contentDescription = "${song.album} artwork"
+
+        artworkExecutor.execute {
+            val bitmap = try {
+                val retriever = android.media.MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(this, song.uri)
+                    val bytes = retriever.embeddedPicture
+                    if (bytes != null) {
+                        android.graphics.BitmapFactory.decodeByteArray(
+                            bytes, 0, bytes.size
+                        )
+                    } else null
+                } finally {
+                    retriever.release()
+                }
+            } catch (e: Exception) {
+                null
             }
-        } catch (e: Exception) {
-            null
+
+            if (bitmap != null) {
+                runOnUiThread {
+                    if (image.tag == key) {
+                        image.setImageBitmap(bitmap)
+                        image.scaleType = ImageView.ScaleType.CENTER_CROP
+                    }
+                }
+            }
         }
 
-        return ImageView(this).apply {
-            setImageBitmap(bitmap)
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            background = rounded(Color.rgb(75, 43, 105), 12)
-            clipToOutline = true
-            contentDescription = "${song.album} artwork"
-        }
+        return image
     }
 
     private fun songRow(song: Song): LinearLayout {
@@ -1133,6 +1151,7 @@ player.addListener(object : Player.Listener {
     }
 
     override fun onDestroy() {
+        artworkExecutor.shutdownNow()
         super.onDestroy()
         controllerFuture?.let { MediaController.releaseFuture(it) }
     }
