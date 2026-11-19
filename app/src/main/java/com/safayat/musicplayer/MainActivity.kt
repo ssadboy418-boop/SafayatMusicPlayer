@@ -708,28 +708,43 @@ root.addView(
         updateMini()
     }
 
+    private fun closeNowPlaying() {
+        root.getChildAt(2)?.visibility = View.VISIBLE
+        render()
+    }
+
     private fun showNowPlaying() {
         val song = currentSong ?: return
 
         screen.removeAllViews()
+        mini.visibility = View.GONE
+        root.getChildAt(2)?.visibility = View.GONE
 
         val back = txt("‹   BACK", 15f, purple, true)
         back.setOnClickListener {
-            render()
+            closeNowPlaying()
         }
         screen.addView(back)
 
         space(25)
 
-        val artwork = TextView(this).apply {
-            text = "♫"
-            textSize = 100f
-            gravity = Gravity.CENTER
-            setTextColor(white)
-            background = rounded(
-                Color.rgb(93, 49, 145),
-                28
-            )
+        val artwork = artworkView(song, 230)
+
+        var artworkTouchY = 0f
+        artwork.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    artworkTouchY = event.rawY
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (event.rawY - artworkTouchY > dp(45)) {
+                        closeNowPlaying()
+                    }
+                    true
+                }
+                else -> true
+            }
         }
 
         screen.addView(
@@ -976,8 +991,22 @@ player.addListener(object : Player.Listener {
 
         mini.addView(row)
 
-        mini.setOnClickListener {
-            showNowPlaying()
+        var miniTouchY = 0f
+        mini.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    miniTouchY = event.rawY
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    val distance = miniTouchY - event.rawY
+                    if (distance > dp(45) || kotlin.math.abs(distance) < dp(12)) {
+                        showNowPlaying()
+                    }
+                    true
+                }
+                else -> true
+            }
         }
     }    private fun stat(icon: String, value: String, label: String): LinearLayout {
         val box = LinearLayout(this).apply {
