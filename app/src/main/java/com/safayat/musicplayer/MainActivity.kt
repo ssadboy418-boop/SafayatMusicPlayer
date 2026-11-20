@@ -42,6 +42,8 @@ private var controllerFuture: ListenableFuture<MediaController>? = null
 
     private val songs = mutableListOf<Song>()
     private val artworkExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
+    private val songScanExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var songScanGeneration = 0
     private val favorites = mutableSetOf<Long>()
 
     private val purple = Color.rgb(168, 85, 247)
@@ -227,67 +229,65 @@ root.addView(
     }
 
     private fun loadSongs() {
-        songs.clear()
+        val generation = ++songScanGeneration
 
-        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        songScanExecutor.execute {
+            val loadedSongs = mutableListOf<Song>()
+            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.DURATION
-        )
-
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-
-        contentResolver.query(
-            collection,
-            projection,
-            selection,
-            null,
-            "${MediaStore.Audio.Media.TITLE} ASC"
-        )?.use { cursor ->
-
-            val idColumn = cursor.getColumnIndexOrThrow(
-                MediaStore.Audio.Media._ID
-            )
-            val titleColumn = cursor.getColumnIndexOrThrow(
-                MediaStore.Audio.Media.TITLE
-            )
-            val artistColumn = cursor.getColumnIndexOrThrow(
-                MediaStore.Audio.Media.ARTIST
-            )
-            val albumColumn = cursor.getColumnIndexOrThrow(
-                MediaStore.Audio.Media.ALBUM
-            )
-            val durationColumn = cursor.getColumnIndexOrThrow(
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.DURATION
             )
 
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
+            val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
-                val uri = android.content.ContentUris.withAppendedId(
-                    collection,
-                    id
-                )
+            contentResolver.query(
+                collection,
+                projection,
+                selection,
+                null,
+                "${MediaStore.Audio.Media.TITLE} ASC"
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
 
-                songs.add(
-                    Song(
-                        id = id,
-                        title = cursor.getString(titleColumn) ?: "Unknown",
-                        artist = cursor.getString(artistColumn) ?: "Unknown Artist",
-                        album = cursor.getString(albumColumn) ?: "Unknown Album",
-                        uri = uri,
-                        duration = cursor.getLong(durationColumn)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val uri = android.content.ContentUris.withAppendedId(collection, id)
+
+                    loadedSongs.add(
+                        Song(
+                            id = id,
+                            title = cursor.getString(titleColumn) ?: "Unknown",
+                            artist = cursor.getString(artistColumn) ?: "Unknown Artist",
+                            album = cursor.getString(albumColumn) ?: "Unknown Album",
+                            uri = uri,
+                            duration = cursor.getLong(durationColumn)
+                        )
                     )
-                )
+                }
+            }
+
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed &&
+                    generation == songScanGeneration
+                ) {
+                    songs.clear()
+                    songs.addAll(loadedSongs)
+                    render()
+                }
             }
         }
+    }
 
-        render()
-    }    private fun render() {
+    private fun render() {
         screen.removeAllViews()
 
         when (tab) {
@@ -1180,6 +1180,8 @@ player.addListener(object : Player.Listener {
     }
 
     override fun onDestroy() {
+        songScanGeneration++
+        songScanExecutor.shutdownNow()
         artworkExecutor.shutdownNow()
         super.onDestroy()
         controllerFuture?.let { MediaController.releaseFuture(it) }
