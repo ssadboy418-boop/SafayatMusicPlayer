@@ -15,6 +15,7 @@ class MusicService : MediaSessionService() {
         super.onCreate()
 
         player = ExoPlayer.Builder(this).build()
+        player.setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
 
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
